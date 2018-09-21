@@ -1,0 +1,76 @@
+Single Thread Grep
+==================
+
+The Single Thread grep reads the file by line parses each of line to find the matching pattern and then prints the pattern onto the screen. The linux command grep also does the regular
+pattern matching for the substring. 
+
+
+Multithtreaded grep
+===================
+
+Multithreaded grep creates a number of threads depending on the input and divides the file and then searches for the pattern. This Multithreaded grep(pargrep) is usually faster for large
+files than linux grep. 
+
+Below is the architecture for single threaded grep and Multithreaded grep.
+
+
+1. Grep
+		|----------------------------------------------------------------------------|
+   -------------|				File					     |--------------
+		|----------------------------------------------------------------------------| 
+	        	^				^				^
+			|  ----> moves sequentially->	| --------> moves sequentially->|
+		    file pointer			file pointer			file pointer
+
+					Figure 1.0 
+
+Figure 1.0 depecits the linux grep in which the file pointer moves sequentially scanning for the pattern and then displays the pattern.
+
+2. Multithread Grep
+
+		|----------------------------------------------------------------------------|
+   -------------|				File					     |--------------
+		|----------------------------------------------------------------------------| 
+	        	^				^				^
+			|  				|	   			|
+		    file pointer 1			file pointer 2		 file pointer 3	
+
+					Figure 1.1
+
+Figure 1.1 depicits the Multithreaded grep. In Multithreaded Grep each thread has a file pointer which points at different offsets of the file. Number of file pointers is same as the number
+of threads being created. For a large file(in 10s of mb) the overhead of creating number of threads is negligible and hence it runs faster than the linux grep. However, for small files
+(in kbs) the overhead comes into picture making it slower than the linux grep.
+
+Synchronization of threads
+==========================
+In multithreaded grep since each thread is running in parallel and all of them use a single resource(stdout) to display data there has to be a way where the threads communicate with
+each other. This is implemented in pargrep.c using a method called ladder chaining.
+
+			|-----|       	|-----|		|-----|		|-----|				|------|	|-----|
+			|  T1 |	<-------|  T2 |	<------	|  T3 |	<------	|  T4 |<------------------------| Tn-1 | <-----	| Tn  |
+      			|-----|	      	|-----|		|-----|		|-----|				|------|	|-----|
+	           Displays		   	
+		    Data	waits for        waits for	waits for				waits for 	Waits for
+	          and signals 	 T1 to		  T2 to		 T3 to					 Tn-2 to 	Tn-1 to
+				signal		 signal		signal					signal	 	 signal
+
+					Figure 1.2
+
+Figure 1.2 depicts how the synchronization is implemented in pargrep.c file. Thread T1 just displays data and signals Thread T2 that it has finished displaying. Thread T2 then displays its
+own data and then signals Thread T3 that it has finshed displaying. This continues till the last thread.
+
+Comparision of grep and pargrep
+===============================
+
+for a file of of size 190 bytes the time taken by grep on an average is 0.01s and the time taken by pargrep on an average is 0.02s (rounded to nearest decimal).
+for a file of size 5k bytes the time taken by grep and pargrep on an average is 0.02s.
+for a file size of 64 mb the time taken by grep on average is 0.744s and the time taken for pargrep on an average is 0.571s.
+
+This proves that as the file size increases the overhead of creating the threads becomes negligible and pargrep executes faster than grep.
+
+Disadvantage of using Multithreaded Grep
+========================================
+1. It is slow on smaller files because of the thread over head.
+2. Consecutive read to the IO is always sequential that is even if the threads are parallel, the reads to IO are always sequential hence the threads stall waiting for the IO.
+
+   
